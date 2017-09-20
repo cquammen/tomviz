@@ -22,6 +22,8 @@
 #include "SetTiltAnglesReaction.h"
 #include "Utilities.h"
 
+#include <pqActiveObjects.h>
+#include <pqApplicationCore.h>
 #include <pqPropertiesPanel.h>
 #include <pqProxyWidget.h>
 #include <pqView.h>
@@ -40,9 +42,35 @@
 
 #include <QDebug>
 #include <QDoubleValidator>
+#include <QGroupBox>
 #include <QMainWindow>
 
 namespace tomviz {
+
+void setupInformationWidget(pqProxyInformationWidget* infoWidget) {
+  // Remove the spacer from the information widgets. These add too much space
+  // below the information widgets.
+  QLayout* layout = infoWidget->layout();
+  for (int i = 0; i < layout->count(); ++i) {
+    QLayoutItem *layoutItem = layout->itemAt(i);
+    if (layoutItem->spacerItem()) {
+        layout->removeItem(layoutItem);
+        delete layoutItem;
+        --i;
+    }
+  }
+
+  // Hide some information groups
+  const char* groupBoxNames[] =
+    { "properties", "groupDataTime", "groupBox", "groupBox_3" };
+  for (size_t i = 0; i < sizeof(groupBoxNames)/sizeof(char*); ++i) {
+    QGroupBox* gb =
+      infoWidget->findChild<QGroupBox *>(groupBoxNames[i]);
+    if (gb) {
+      gb->setVisible(false);
+    }
+  }
+}
 
 DataPropertiesPanel::DataPropertiesPanel(QWidget* parentObject)
   : QWidget(parentObject), m_ui(new Ui::DataPropertiesPanel)
@@ -51,24 +79,32 @@ DataPropertiesPanel::DataPropertiesPanel(QWidget* parentObject)
   m_ui->xLengthBox->setValidator(new QDoubleValidator(m_ui->xLengthBox));
   m_ui->yLengthBox->setValidator(new QDoubleValidator(m_ui->yLengthBox));
   m_ui->zLengthBox->setValidator(new QDoubleValidator(m_ui->zLengthBox));
+
+  // Clean up the information widgets
+  setupInformationWidget(m_ui->OriginalInformationWidget);
+  setupInformationWidget(m_ui->TransformedInformationWidget);
+
+  // Disconnect certain signals and slots from the information widget
+  disconnect(&pqActiveObjects::instance(), SIGNAL(portChanged(pqOutputPort*)),
+    m_ui->OriginalInformationWidget, SLOT(setOutputPort(pqOutputPort*)));
+  disconnect(&pqActiveObjects::instance(), SIGNAL(portChanged(pqOutputPort*)),
+    m_ui->TransformedInformationWidget, SLOT(setOutputPort(pqOutputPort*)));
+
   QVBoxLayout* l = m_ui->verticalLayout;
 
   l->setSpacing(pqPropertiesPanel::suggestedVerticalSpacing());
 
   // add separator labels.
-  QWidget* separator = pqProxyWidget::newGroupLabelWidget("Filename", this);
-  l->insertWidget(l->indexOf(m_ui->FileName), separator);
-
+  QWidget* separator = nullptr;
   separator =
     pqProxyWidget::newGroupLabelWidget("Original Dimensions & Range", this);
-  l->insertWidget(l->indexOf(m_ui->OriginalDataRange), separator);
+  l->insertWidget(l->indexOf(m_ui->OriginalInformationWidget), separator);
 
   separator =
     pqProxyWidget::newGroupLabelWidget("Transformed Dimensions & Range", this);
-  l->insertWidget(l->indexOf(m_ui->TransformedDataRange), separator);
+  l->insertWidget(l->indexOf(m_ui->TransformedInformationWidget), separator);
 
   separator = pqProxyWidget::newGroupLabelWidget("Units and Size", this);
-
   l->insertWidget(l->indexOf(m_ui->LengthWidget), separator);
 
   m_tiltAnglesSeparator =
@@ -105,48 +141,45 @@ void DataPropertiesPanel::setDataSource(DataSource* dsource)
   if (m_currentDataSource) {
     disconnect(m_currentDataSource);
   }
+
+  // Clean up the information widgets and any pqPipelineSources we created the
+  // last time this method was called.
+  pqOutputPort* port = m_ui->OriginalInformationWidget->getOutputPort();
+  if (port) {
+    pqPipelineSource* source = port->getSource();
+    if (source) {
+      source->deleteLater();
+    }
+  }
+  m_ui->OriginalInformationWidget->setOutputPort(nullptr);
+  port = m_ui->TransformedInformationWidget->getOutputPort();
+  if (port) {
+    pqPipelineSource* source = port->getSource();
+    if (source) {
+      source->deleteLater();
+    }
+  }
+
   m_currentDataSource = dsource;
   if (dsource) {
     connect(dsource, SIGNAL(dataChanged()), SLOT(scheduleUpdate()),
             Qt::UniqueConnection);
+
+    // Create a temporary pipeline source that we use to get a pqOutputPort
+    // suitable to set in ParaView's information widget.
+    pqPipelineSource* source =
+      new pqPipelineSource("", dsource->originalDataSource(),
+        pqActiveObjects::instance().activeServer());
+    m_ui->OriginalInformationWidget->setOutputPort(source->getOutputPort(0));
+
+    source =
+      new pqPipelineSource("", dsource->producer(),
+        pqActiveObjects::instance().activeServer());
+    m_ui->TransformedInformationWidget->setOutputPort(source->getOutputPort(0));
   }
   scheduleUpdate();
 }
 
-namespace {
-
-QString getDataExtentAndRangeString(vtkSMSourceProxy* proxy)
-{
-  vtkPVDataInformation* info = proxy->GetDataInformation(0);
-
-  QString extentString =
-    QString("%1 x %2 x %3")
-      .arg(info->GetExtent()[1] - info->GetExtent()[0] + 1)
-      .arg(info->GetExtent()[3] - info->GetExtent()[2] + 1)
-      .arg(info->GetExtent()[5] - info->GetExtent()[4] + 1);
-
-  if (vtkPVArrayInformation* scalarInfo =
-        tomviz::scalarArrayInformation(proxy)) {
-    return QString("(%1)\t%2 : %3")
-      .arg(extentString)
-      .arg(scalarInfo->GetComponentRange(0)[0])
-      .arg(scalarInfo->GetComponentRange(0)[1]);
-  } else {
-    return QString("(%1)\t? : ? (type: ?)").arg(extentString);
-  }
-}
-
-QString getDataTypeString(vtkSMSourceProxy* proxy)
-{
-  if (vtkPVArrayInformation* scalarInfo =
-        tomviz::scalarArrayInformation(proxy)) {
-    return QString("Type: %1")
-      .arg(vtkImageScalarTypeNameMacro(scalarInfo->GetDataType()));
-  } else {
-    return QString("Type: ?");
-  }
-}
-}
 
 void DataPropertiesPanel::updateData()
 {
@@ -162,16 +195,6 @@ void DataPropertiesPanel::updateData()
   if (!dsource) {
     return;
   }
-
-  m_ui->FileName->setText(dsource->filename());
-
-  m_ui->OriginalDataRange->setText(
-    getDataExtentAndRangeString(dsource->originalDataSource()));
-  m_ui->OriginalDataType->setText(
-    getDataTypeString(dsource->originalDataSource()));
-  m_ui->TransformedDataRange->setText(
-    getDataExtentAndRangeString(dsource->producer()));
-  m_ui->TransformedDataType->setText(getDataTypeString(dsource->producer()));
 
   int extent[6];
   double spacing[3];
@@ -346,11 +369,6 @@ void DataPropertiesPanel::updateAxesGridLabels()
 
 void DataPropertiesPanel::clear()
 {
-  m_ui->FileName->setText("");
-  m_ui->OriginalDataRange->setText("");
-  m_ui->OriginalDataType->setText("Type:");
-  m_ui->TransformedDataRange->setText("");
-  m_ui->TransformedDataType->setText("Type:");
   if (m_colorMapWidget) {
     m_ui->verticalLayout->removeWidget(m_colorMapWidget);
     delete m_colorMapWidget;
