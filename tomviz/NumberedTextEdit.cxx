@@ -2,7 +2,6 @@
 
   This source file is part of the tomviz project.
 
-
   Copyright Kitware, Inc.
 
   This source code is released under the New BSD License, (the "License").
@@ -14,32 +13,19 @@
   limitations under the License.
 
 ******************************************************************************/
-#ifndef tomvizOperatorPythonWrapper_h
-#define tomvizOperatorPythonWrapper_h
+#include "NumberedTextEdit.h"
 
-#include <string>
-
-class vtkImageData;
-
-namespace tomviz {
-class OperatorPython;
+NumberedTextEdit::NumberedTextEdit(QWidget* parent) :
+  QTextEdit(parent)
+{
 }
 
-struct OperatorPythonWrapper
+int NumberedTextEdit::numberAreaWidth()
 {
-  OperatorPythonWrapper(void* o);
-  bool canceled();
-  void setTotalProgressSteps(int progress);
-  int totalProgressSteps();
-  void setProgressStep(int progress);
-  int progressStep();
-  void setProgressMessage(const std::string& message);
-  std::string progressMessage();
-  void setDataUpdate(const vtkImageData* object);
-  vtkImageData* dataUpdate();
-  void dataUpdated();
+	
+}
 
-  tomviz::OperatorPython* op = nullptr;
-};
-
-#endif
+void NumberedTextEdit::numberAreaPaintEvent(QPaintEvent* event)
+{
+	
+}

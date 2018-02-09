@@ -1,5 +1,7 @@
 import tomviz.operators
 
+import time
+
 NUMBER_OF_CHUNKS = 10
 
 
@@ -24,5 +26,8 @@ class InvertOperator(tomviz.operators.CancelableOperator):
             chunk[:] = max - chunk + min
             step += 1
             self.progress.value = step
+            utils.set_scalars(dataset, result)
+            self.progress.data_updated()
+            time.sleep(1)
 
         utils.set_scalars(dataset, result)

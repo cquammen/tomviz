@@ -70,6 +70,26 @@ class Progress(object):
         """
         self._operator._operator_wrapper.progress_message = msg
 
+    @property
+    def data(self):
+        """
+        Property defining current data object value.
+        """
+        return self._operator._operator_wrapper.progress_data
+
+    @data.setter
+    def data(self, value):
+        self._operator._operator_wrapper.progress_data = value
+
+    def data_updated(self):
+        self._operator._operator_wrapper.data_updated()
+
+class DataSet(object):
+    """
+    A tiny wrapper for vtkDataSet needed to pass the dataset to the C++ side.
+    """
+    def __init__(self, operator):
+        self._operator = operator
 
 class Operator(object):
     """
