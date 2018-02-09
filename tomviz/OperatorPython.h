@@ -71,6 +71,8 @@ public:
   static void registerCustomWidget(const QString& key, bool needsData,
                                    CustomWidgetFunction func);
 
+  void dataUpdated();
+
 signals:
   // Signal used to request the creation of a new data source. Needed to
   // ensure the initialization of the new DataSource is performed on UI thread

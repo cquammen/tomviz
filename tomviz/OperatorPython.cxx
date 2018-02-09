@@ -118,6 +118,11 @@ void OperatorPython::registerCustomWidget(const QString& key, bool needsData,
                          QPair<bool, CustomWidgetFunction>(needsData, func));
 }
 
+void OperatorPython::dataUpdated()
+{
+  dataSource()->dataChanged();
+}
+
 class OperatorPython::OPInternals
 {
 public:
