@@ -76,12 +76,14 @@ class Progress(object):
     # Write-only property to update child data
     data = property(fset=_data)
 
+
 class DataSet(object):
     """
     A tiny wrapper for vtkDataSet needed to pass the dataset to the C++ side.
     """
     def __init__(self, operator):
         self._operator = operator
+
 
 class Operator(object):
     """
